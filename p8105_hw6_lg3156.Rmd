@@ -202,6 +202,66 @@ cv_birthweight %>%
         y = "RMSE")
 ```
 
-According to the comparisons, I find my model has the highest rmse, which means this is the worsest model among these three. Medel 2 has the lowest rmse and can be the reasonable choice.
+According to the comparisons, I find my model has the highest rmse, which means this is the worst model among these three. Model 2 has the lowest rmse and can be the reasonable choice.
 
+# Problem 3
+read in data
+
+```{r}
+weather_df = 
+  read.csv("./data/df.csv")
+```
+
+```{r}
+bootstrap_results = 
+  weather_df %>% 
+  bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x)),
+    result_tidy = map(models, broom::tidy),
+    result_glance = map(models, broom::glance)) %>% 
+  unnest(result_tidy, result_glance) %>% 
+  select(id = .id, term, estimate, r_squared = r.squared)
+
+bootstrap_results %>% head() %>% knitr::kable()
+```
+
+## Distribution of r^2
+
+```{r}
+bootstrap_results %>%
+  ggplot(aes(x = r_squared)) +
+  geom_density() +
+  labs(
+        title = "Distribution of r^2"
+    )
+```
+
+The distribution of r^2 is approximately normal. According to this plot, it is distributed around 0.88 and 0.94, really close to 1, which means the model fit well and y can be well explained by x.
+
+```{r}
+bootstrap_results %>%
+  select(id, term, estimate) %>%
+  pivot_wider(names_from = term,
+              values_from = estimate) %>% 
+  rename(intercept = `(Intercept)`) %>% 
+  mutate(
+    log_beta01 = log(intercept*tmin)
+  ) %>% 
+  ggplot(aes(x = log_beta01)) +
+  geom_density() +
+  labs(
+        title = "Distribution of log(β0 x β1)",
+        x = "log(β0 x β1)"
+    )
+```
+
+The distribution of log(β0 x β1) is approximately normal, too. The mean of it is about 4.33.
+```{r}
+quantile(bootstrap_results$r_squared, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for r^2")
+```
+
+```{r}
+quantile(bootstrap_results$log_beta, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for log(β0 x β1)")
+```
 
