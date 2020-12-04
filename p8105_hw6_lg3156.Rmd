@@ -1,0 +1,207 @@
+---
+title: "HW6"
+author: "Liner Ge"
+date: "2020/12/4"
+output: github_document
+---
+```{r}
+library(tidyverse)
+library(readxl)
+library(patchwork)
+library(modelr)
+library(mgcv)
+set.seed(1)
+```
+
+# Problem 1
+
+read in data
+```{r}
+homicide_df =
+  read_csv("./data/homicide-data.csv", na = c("", "NA", "Unknown")) %>% 
+  mutate(
+    city_state = str_c(city, state, sep = ", "),
+    victim_age = as.numeric(victim_age),
+    resolution = case_when(
+      disposition == "Closed without arrest" ~ 0,
+      disposition == "Open/No arrest"        ~ 0,
+      disposition == "Closed by arrest"      ~ 1)
+  ) %>% 
+  filter(
+    victim_race %in% c("White", "Black"),
+    city_state != "Tulsa, AL") %>% 
+  select(city_state, resolution, victim_age, victim_race, victim_sex)
+```
+
+Try this across cities
+
+```{r}
+models_results_df =
+  homicide_df %>% 
+  nest(data = -city_state) %>% 
+  mutate(
+    models = 
+      map(.x = data, ~glm(resolution ~ victim_age + victim_race + victim_sex, data = .x, family = binomial())),
+    results = map(models, broom::tidy)
+    ) %>% 
+  select(city_state, results) %>% 
+  unnest(results) %>% 
+  mutate(
+    OR = exp(estimate), # odds ratio
+    CI_lower = exp(estimate - 1.96 * std.error),
+    CI_upper = exp(estimate + 1.96 * std.error)
+  ) %>% 
+  select(city_state, term, OR, starts_with("CI"))
+
+```
+
+```{r}
+models_results_df %>% 
+  filter(term == "victim_sexMale") %>% 
+  mutate(city_state = fct_reorder(city_state, OR)) %>% 
+  ggplot(aes(x = city_state, y = OR)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+# Problem 2
+
+## read in and tidy the data 
+
+```{r}
+birtnweight_df = 
+  read.csv("./data/birthweight.csv") %>% 
+  janitor::clean_names() %>%
+  filter(frace != 9) %>% 
+  drop_na() %>% 
+  mutate(
+    babysex = case_when(
+      babysex == 1 ~ "male",
+      babysex == 2 ~ "female"
+    ),
+    frace = case_when(
+      frace == 1 ~ "White",
+      frace == 2 ~ "Black",
+      frace == 3 ~ "Asian",
+      frace == 4 ~ "Puerto Rican",
+      frace == 8 ~ "Other"
+    ),
+    mrace = case_when(
+      mrace == 1 ~ "White",
+      mrace == 2 ~ "Black",
+      mrace == 3 ~ "Asian",
+      mrace == 4 ~ "Puerto Rican",
+      mrace == 8 ~ "Other"
+    ),
+    malform = case_when(
+      malform == 0 ~ "absent",
+      malform == 1 ~ "present"
+    ),
+    across(where(is.character), as.factor)
+    )
+```
+
+## Model selection
+
+```{r}
+birtnweight_df %>% 
+  lm(bwt~.,data = .) %>% 
+  broom::tidy() %>% 
+  knitr::kable(digits = 3)
+```
+
+I assume that baby's weight is associated with physiological conditions of his/her mother' pregnancy. According to the regression model of all veriable, I would choose variables with p.value smaller than 0.05. Thus, I choose  mother’s age at delivery `momage`, mother’s weight gain during pregnancy `wtgain`, gestational age in weeks`gaweeks`, number of live births prior to this pregnancy`parity` as predictors.
+
+```{r}
+fit_1 = lm(bwt ~ momage +  wtgain + gaweeks + parity, data = birtnweight_df)
+
+fit_1 %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
+
+fit_1_df = 
+  birtnweight_df %>% 
+  select(bwt, momage, wtgain, gaweeks, parity) %>% 
+  modelr::add_residuals(fit_1) %>% 
+  modelr::add_predictions(fit_1)
+```
+
+## Plot of model residuals against fitted values
+
+```{r}
+fit_1_df %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", color = "red", linetype = 2) + 
+  labs(
+    title = "Plot of model residuals against fitted values",
+    x = "Predictions",
+    y = "Residuals"
+  )
+  
+```
+
+## The other two models
+
+```{r}
+model_1 = lm(bwt ~ blength + gaweeks, data = birtnweight_df)
+
+model_1 %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
+```
+
+```{r}
+model_2 = lm(bwt ~ bhead * blength * babysex, data = birtnweight_df)
+
+model_2 %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
+```
+
+```{r}
+cv_df = 
+  crossv_mc(birtnweight_df, 200) %>% 
+   mutate(
+        train = map(train, as.tibble),
+        test = map(test, as.tibble)
+    )
+
+cv_birthweight = 
+  cv_df %>% 
+    mutate(
+        my_model = map(train, ~lm(bwt ~ momage +  wtgain + gaweeks + parity, data = .x)),
+        model_1 = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+        model_2 = map(train, ~lm(bwt ~ bhead * blength * babysex, data = .x))
+    ) %>% 
+    mutate(
+        rmse_my_model = 
+          map2_dbl(my_model, test, ~rmse(model = .x, data = .y)),
+        rmse_model_1 = 
+          map2_dbl(model_1, test, ~rmse(model = .x, data = .y)),
+        rmse_medel_2 = 
+          map2_dbl(model_2, test, ~rmse(model = .x, data = .y))
+    )
+
+cv_birthweight %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin() +
+  labs(
+        title = "Cross Validation Comparisons",
+        x = "Models",
+        y = "RMSE")
+```
+
+According to the comparisons, I find my model has the highest rmse, which means this is the worsest model among these three. Medel 2 has the lowest rmse and can be the reasonable choice.
+
+
