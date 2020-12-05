@@ -245,14 +245,17 @@ bootstrap_results %>%
 The distribution of r^2 is approximately normal. According to this plot, it is distributed around 0.88 and 0.94, really close to 1, which means the model fit well and y can be well explained by x.
 
 ```{r}
-bootstrap_results %>%
+log_beta = 
+  bootstrap_results %>%
   select(id, term, estimate) %>%
   pivot_wider(names_from = term,
               values_from = estimate) %>% 
   rename(intercept = `(Intercept)`) %>% 
   mutate(
     log_beta01 = log(intercept*tmin)
-  ) %>% 
+  ) 
+
+log_beta %>% 
   ggplot(aes(x = log_beta01)) +
   geom_density() +
   labs(
@@ -267,6 +270,6 @@ quantile(bootstrap_results$r_squared, probs = c(0.025,0.975)) %>% knitr::kable(c
 ```
 
 ```{r}
-quantile(bootstrap_results$log_beta, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for log(^β0 x ^β1)")
+quantile(log_beta$log_beta01, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for log(^β0 x ^β1)")
 ```
 
