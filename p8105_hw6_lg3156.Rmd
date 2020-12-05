@@ -209,7 +209,12 @@ read in data
 
 ```{r}
 weather_df = 
-  read.csv("./data/df.csv")
+  read.csv("./data/df.csv") %>% 
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
 ```
 
 ```{r}
@@ -251,17 +256,17 @@ bootstrap_results %>%
   ggplot(aes(x = log_beta01)) +
   geom_density() +
   labs(
-        title = "Distribution of log(β0 x β1)",
-        x = "log(β0 x β1)"
+        title = "Distribution of log(^β0 x ^β1)",
+        x = "log(^β0 x ^β1)"
     )
 ```
 
-The distribution of log(β0 x β1) is approximately normal, too. The mean of it is about 4.33.
+The distribution of log(^β0 x ^β1) is approximately normal, too. The mean of it is about 2.02.
 ```{r}
 quantile(bootstrap_results$r_squared, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for r^2")
 ```
 
 ```{r}
-quantile(bootstrap_results$log_beta, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for log(β0 x β1)")
+quantile(bootstrap_results$log_beta, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for log(^β0 x ^β1)")
 ```
 
