@@ -134,7 +134,6 @@ fit_1_df =
 fit_1_df %>% 
   ggplot(aes(x = pred, y = resid)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(method = "lm", color = "red", linetype = 2) + 
   labs(
     title = "Plot of model residuals against fitted values",
     x = "Predictions",
@@ -265,11 +264,22 @@ log_beta %>%
 ```
 
 The distribution of log(^β0 x ^β1) is approximately normal, too. The mean of it is about 2.02.
-```{r}
-quantile(bootstrap_results$r_squared, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for r^2")
-```
 
+## 95% CI for r^2
 ```{r}
-quantile(log_beta$log_beta01, probs = c(0.025,0.975)) %>% knitr::kable(caption = "95% CI for log(^β0 x ^β1)")
+bootstrap_results %>% 
+  distinct(id, r_squared) %>%
+  summarise(lower = quantile(r_squared, 0.025) %>% round(digits = 3),
+            upper = quantile(r_squared, 0.975) %>% round( digit = 3)) %>%
+  knitr::kable(caption = "95% CI for r^2")
+
+```
+## 95% CI for log(^β0 x ^β1)
+```{r}
+log_beta %>% 
+  summarise(lower = quantile(log_beta01, 0.025)%>% round(digits = 3),
+            upper = quantile(log_beta01, 0.975)%>% round(digits = 3)) %>%
+  knitr::kable(caption = "95% CI for log(^β0 x ^β1)")
+
 ```
 
