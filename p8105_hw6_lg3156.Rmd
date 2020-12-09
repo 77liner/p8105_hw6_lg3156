@@ -206,6 +206,7 @@ According to the comparisons, I find my model has the highest rmse, which means 
 # Problem 3
 read in data
 
+I cannot download data with code provided. With allowance of Jeff, I read in the csv download by classmate.
 ```{r}
 weather_df = 
   read.csv("./data/df.csv") %>% 
